@@ -1,0 +1,20 @@
+Package: rpsftmPDT
+Title: Evaluate the treatment effect on overall survival in the presence of treatment crossover and other post-discontinuation therapies
+Version: 0.0.0.9000
+Authors@R: 
+    person("First", "Last", , "first.last@example.com", role = c("aut", "cre"),
+           comment = c(ORCID = "YOUR-ORCID-ID"))
+Description: The package implements two proposed methods (RPSFT + Cox and RPSFT + IPCW) to evaluate the treatment effect on overall survival in the presence of treatment crossover and other post-discontinuation therapies (PDTs). 
+License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.2.3
+Imports: 
+    nphRCT,
+    survival
+Suggests: 
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3
+Depends: 
+    R (>= 2.10)
+LazyData: true
