@@ -21,31 +21,31 @@ rpsft.weighted(
 )
 }
 \arguments{
-\item{t.pfs}{the progression-free survival (PFS) time}
+\item{t.pfs}{the progression-free survival (PFS) time.}
 
 \item{t.co}{the observed time from the start to the end of the crossover
-period}
+period.}
 
-\item{t.os}{the overall survival (OS) time}
+\item{t.os}{the overall survival (OS) time.}
 
 \item{a}{the initial binary treatment indicator encoded as 0 (control) or
-1 (treatment)}
+1 (treatment).}
 
-\item{delta.os}{the event indicator of the OS}
+\item{delta.os}{the event indicator of the OS.}
 
-\item{delta.co}{the event indicator of treatment crossover}
+\item{delta.co}{the event indicator of treatment crossover.}
 
-\item{delta.pdt}{the event indicator of the PDTs}
+\item{delta.pdt}{the event indicator of the PDTs.}
 
 \item{cen.time}{the censoring time. Under administrative censoring, the
-censoring time is available for each subject}
+censoring time is available for each subject.}
 
 \item{const}{the multiplicative sensitivity parameter that reflects a change
 in the treatment benefit for subjects in the control group with treatment
 crossover. Default: \code{const = 1}.}
 
 \item{weights}{the use-defined weights used in the log-rank test. Default:
-each individual has an equal weight, i.e., \code{weights = rep(1, length(a))}}
+each individual has an equal weight, i.e., \code{weights = rep(1, length(a))}.}
 
 \item{tau.lower}{the lower bound of the treatment effect parameter for the
 grid search. Default: \code{tau.lower = -1}.}

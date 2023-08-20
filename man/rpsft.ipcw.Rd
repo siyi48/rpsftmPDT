@@ -18,33 +18,35 @@ rpsft.ipcw(
   const = 1,
   tau.lower = -1,
   tau.upper = 1,
-  grid.length = 50
+  grid.length = 50,
+  var.est = FALSE,
+  B = NULL
 )
 }
 \arguments{
-\item{t.pfs}{the progression-free survival (PFS) time}
+\item{t.pfs}{the progression-free survival (PFS) time.}
 
 \item{t.co}{the observed time from the start to the end of the crossover
-period}
+period.}
 
-\item{t.os}{the overall survival (OS) time}
+\item{t.os}{the overall survival (OS) time.}
 
-\item{delta.os}{the event indicator of the OS}
+\item{delta.os}{the event indicator of the OS.}
 
 \item{cen.time}{the censoring time. Under administrative censoring, the
-censoring time is available for each subject}
+censoring time is available for each subject.}
 
 \item{a}{the initial binary treatment indicator encoded as 0 (control) or
-1 (treatment)}
+1 (treatment).}
 
 \item{mat.pdt}{the matrix of all prognosis factors that may affect the
 patient to receive the PDTs, with the dimension as n*p, where n: the sample
 size, p: dimension of the prognosis factors. Inclusion of the survival times
 before the PDT period is recommended.}
 
-\item{delta.co}{the event indicator of treatment crossover}
+\item{delta.co}{the event indicator of treatment crossover.}
 
-\item{delta.pdt}{the event indicator of the PDTs}
+\item{delta.pdt}{the event indicator of the PDTs.}
 
 \item{include.pdt}{a logical variable to indicate the inclusion of the PDT
 effects in the OS analysis. Default: \code{include.pdt = TRUE}.}
@@ -61,9 +63,21 @@ grid search. Default: \code{tau.upper = 1}.}
 
 \item{grid.length}{the number of values in the grid search. Default:
 \code{grid.length = 50}.}
+
+\item{var.est}{the logical variable to indicate whether the bootstrap
+variance estimate will be included. Default: \code{var.est = FALSE}, i.e., no
+inclusion of the variance estimate.}
+
+\item{B}{the number of bootstrap replicate. When setting \code{var.est = TRUE},
+\code{B} must be given.}
 }
 \value{
-tau.est an estimate of the treatment effect
+a list of test results
+\itemize{
+\item tau.est: the estimate of the treatment effect
+\item var.est: the variance estimate of the treatment effect if set
+\code{var.est = TRUE}
+}
 }
 \description{
 This function implements the proposed RPSFT + IPCW method and returns an
@@ -84,7 +98,7 @@ delta.pdt <- dat$delta.pdt
 delta.co <- dat$delta.co
 delta.os <- dat$delta.os
 mat.pdt <- cbind(x, t.co)
-res.rpsftipcw <- rpsft.ipcw(t.pfs, t.co, t.os, delta.os, 
+res.rpsftipcw <- rpsft.ipcw(t.pfs, t.co, t.os, delta.os,
                           cen.time, a, mat.pdt, delta.co, delta.pdt,
                           include.pdt = TRUE, const = 1,
                           tau.lower = -3, tau.upper = 1,

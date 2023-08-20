@@ -6,45 +6,68 @@
 <!-- badges: start -->
 <!-- badges: end -->
 
-The goal of rpsftmPDT is to …
+The goal of rpsftmPDT is to evaluate the treatment effect on overall
+survival (OS) in the presence of treatment crossover and other
+post-discontinuation therapies (PDTs). It provides an estimated
+treatment effect and a variance estimate if needed based on
+nonparametric bootstrap.
 
 ## Installation
 
-You can install the development version of rpsftmPDT like so:
+You can install the development version of rpsftmPDT from
+[GitHub](https://github.com/) with:
 
 ``` r
-# FILL THIS IN! HOW CAN PEOPLE INSTALL YOUR DEV PACKAGE?
+# install.packages("devtools")
+devtools::install_github("siyi48/rpsftmPDT")
 ```
 
-## Example
+## Usage
 
-This is a basic example which shows you how to solve a common problem:
+The two main functions `rpsft.cox` and `rpsft.ipcw` provide two
+different approach to adjust for treatment crossover and PDTs and assess
+the treatment effect on the OS.
+
+To use the two main functions, users need to identify three periods of
+the patients may experience, including the progression-free survival
+period, the treatment crossover period, and the PDT period if the
+patients progress. A basic example which shows a common usage of the
+function `rpsft.cox` is as follows.
 
 ``` r
 library(rpsftmPDT)
 ## basic example code
+x <- cbind(dat$x1, dat$x2)
+a <- dat$a
+t.pfs <- dat$t.pfs
+t.co <- dat$t.co
+t.os <- dat$t.os
+cen.time <- dat$c
+delta.pfs <- dat$delta.pfs
+delta.dp <- dat$delta.dp
+delta.pdt <- dat$delta.pdt
+delta.co <- dat$delta.co
+delta.os <- dat$delta.os
+mat.pdt <- x
+# if no variance estimate is needed
+res.rpsftcox <- rpsft.cox(t.pfs, t.co, t.os, delta.os,
+                          cen.time, a, mat.pdt, delta.co, delta.pdt,
+                          include.pdt = TRUE, const = 1,
+                          tau.lower = -3, tau.upper = 1,
+                          grid.length = 100)
+res.rpsftcox
+#> $tau.est
+#> [1] -0.6969697
+# if the bootstrap variance estimate is included
+res.rpsftcox <- rpsft.cox(t.pfs, t.co, t.os, delta.os,
+                          cen.time, a, mat.pdt, delta.co, delta.pdt,
+                          include.pdt = TRUE, const = 1,
+                          tau.lower = -3, tau.upper = 1,
+                          grid.length = 100, var.est = TRUE, B = 100)
+res.rpsftcox
+#> $tau.est
+#> [1] -0.6969697
+#> 
+#> $var.est
+#> [1] 0.0195938
 ```
-
-What is special about using `README.Rmd` instead of just `README.md`?
-You can include R chunks like so:
-
-``` r
-summary(cars)
-#>      speed           dist       
-#>  Min.   : 4.0   Min.   :  2.00  
-#>  1st Qu.:12.0   1st Qu.: 26.00  
-#>  Median :15.0   Median : 36.00  
-#>  Mean   :15.4   Mean   : 42.98  
-#>  3rd Qu.:19.0   3rd Qu.: 56.00  
-#>  Max.   :25.0   Max.   :120.00
-```
-
-You’ll still need to render `README.Rmd` regularly, to keep `README.md`
-up-to-date. `devtools::build_readme()` is handy for this.
-
-You can also embed plots, for example:
-
-<img src="man/figures/README-pressure-1.png" width="100%" />
-
-In that case, don’t forget to commit and push the resulting figure
-files, so they display on GitHub and CRAN.

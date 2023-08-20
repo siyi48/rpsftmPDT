@@ -1,39 +1,49 @@
 #' Implement the RPSFT + Cox method
 #'
-#' This function implements the proposed RPSFT + Cox method and returns an 
+#' This function implements the proposed RPSFT + Cox method and returns an
 #' estimate of the treatment effect on the overall survival. It can be used if
-#' investigators have sufficient knowledge of the PDT effects and the survival 
+#' investigators have sufficient knowledge of the PDT effects and the survival
 #' time during the PDT period.
-#' 
 #'
-#' @param t.pfs the progression-free survival (PFS) time
-#' @param t.co the observed time from the start to the end of the crossover 
-#' period
-#' @param t.os the overall survival (OS) time
-#' @param delta.os the event indicator of the OS
-#' @param cen.time the censoring time. Under administrative censoring, the 
-#' censoring time is available for each subject
-#' @param a the initial binary treatment indicator encoded as 0 (control) or 
-#' 1 (treatment)
-#' @param mat.pdt the matrix of all prognosis factors that may affect the PDTs, 
-#' dimension: n*p, n: the sample size, p: dimension of the prognosis factors
-#' @param delta.co the vector of crossover indicators
-#' @param delta.pdt the vector of the PDT indicators
+#'
+#' @param t.pfs the progression-free survival (PFS) time.
+#' @param t.co the observed time from the start to the end of the crossover
+#' period.
+#' @param t.os the overall survival (OS) time.
+#' @param delta.os the event indicator of the OS.
+#' @param cen.time the censoring time. Under administrative censoring, the
+#' censoring time is available for each subject.
+#' @param a the initial binary treatment indicator encoded as 0 (control) or
+#' 1 (treatment).
+#' @param mat.pdt the matrix of all prognosis factors that may affect the PDTs,
+#' dimension: n*p, n: the sample size, p: dimension of the prognosis factors.
+#' @param delta.co the vector of crossover indicators.
+#' @param delta.pdt the vector of the PDT indicators.
 #' @param include.pdt a logical variable to indicate the inclusion of the PDT
 #' effects in the OS analysis. Default: `include.pdt = TRUE`.
 #' @param const the multiplicative sensitivity parameter that reflects a change
-#' in the treatment benefit for subjects in the control group with treatment 
+#' in the treatment benefit for subjects in the control group with treatment
 #' crossover.
-#' @param tau.lower the lower bound of the treatment effect parameter for the 
+#' @param tau.lower the lower bound of the treatment effect parameter for the
 #' grid search. Default: `tau.lower = -1`.
-#' @param tau.upper the upper bound of the treatment effect parameter for the 
+#' @param tau.upper the upper bound of the treatment effect parameter for the
 #' grid search. Default: `tau.upper = 1`.
-#' @param grid.length the number of values in the grid search. Default: 
+#' @param grid.length the number of values in the grid search. Default:
 #' `grid.length = 50`.
-#' @return tau.est an estimate of the treatment effect
+#' @param var.est the logical variable to indicate whether the bootstrap
+#' variance estimate will be included. Default: `var.est = FALSE`, i.e., no
+#' inclusion of the variance estimate.
+#' @param B the number of bootstrap replicate. When setting `var.est = TRUE`,
+#' `B` must be given.
+#' @return a list of test results
+#' \itemize{
+#' \item tau.est: the estimate of the treatment effect
+#' \item var.est: the variance estimate of the treatment effect if set
+#' `var.est = TRUE`
+#' }
 #' @import survival
 #' @export
-#' 
+#'
 #' @examples
 #' x <- cbind(dat$x1, dat$x2)
 #' a <- dat$a
@@ -46,28 +56,28 @@
 #' delta.pdt <- dat$delta.pdt
 #' delta.co <- dat$delta.co
 #' delta.os <- dat$delta.os
-#' mat.pdt <- x 
-#' res.rpsftcox <- rpsft.cox(t.pfs, t.co, t.os, delta.os, 
+#' mat.pdt <- x
+#' res.rpsftcox <- rpsft.cox(t.pfs, t.co, t.os, delta.os,
 #'                           cen.time, a, mat.pdt, delta.co, delta.pdt,
 #'                           include.pdt = TRUE, const = 1,
 #'                           tau.lower = -3, tau.upper = 1,
 #'                           grid.length = 100)
 #' res.rpsftcox
-rpsft.cox <- function(t.pfs, t.co, t.os, delta.os, 
+rpsft.cox <- function(t.pfs, t.co, t.os, delta.os,
                       cen.time, a, mat.pdt, delta.co, delta.pdt,
                       include.pdt = TRUE, const = 1,
                       tau.lower = -1, tau.upper = 1,
-                      grid.length = 50, var.boot = FALSE, B = NULL){
-  
+                      grid.length = 50, var.est = FALSE, B = NULL){
+
   # dimension of prognosis factors
   p <- ncol(mat.pdt)
   # length of the data
   n <- length(t.pfs)
-  
+
   if(include.pdt){
     ## Step 1: estimate the PDT effect
     index.pdt <- which(t.co < t.os)
-    
+
     t.pdp <- (t.os - t.co)[index.pdt]
     dat.pdt <- data.frame(t.pdt = t.pdp, delta.os = delta.os[index.pdt],
                           a = a[index.pdt], delta.co = delta.co[index.pdt],
@@ -79,18 +89,18 @@ rpsft.cox <- function(t.pfs, t.co, t.os, delta.os,
     # fit a stratified cox model
     surv.obj <- with(dat.pdt, survival::Surv(t.pdt, delta.os))
     fit.cox <- survival::coxph(surv.obj ~ mat0.pdt.int +
-                                 survival::strata(aco), 
+                                 survival::strata(aco),
                                data = dat.pdt)
     linear.pred <- predict(fit.cox, newdata = dat.pdt)
     pdtmodel.long <- rep(0, n)
     pdtmodel.long[index.pdt] <- linear.pred
   }
-  
+
   else{
     pdtmodel.long <- rep(0, n)
   }
-  
-  
+
+
   ## Step 2: estimate the treatment effect
   res.final <- rpsft.linear(a = a, t.pfs = t.pfs, t.co = t.co, t.os = t.os,
                             delta.os = delta.os, delta.co = delta.co,
@@ -100,49 +110,74 @@ rpsft.cox <- function(t.pfs, t.co, t.os, delta.os,
                             tau.lower = tau.lower, tau.upper = tau.upper,
                             grid.length = grid.length)
   tau.final <- res.final$tau
-  
-  ## Step 3: 
-  res.list <- list(tau.est = tau.final)
-  
-  return(list(
-    tau.est = tau.final
-  ))
+
+  ## Step 3: estimate variance by bootstrap
+  if(!var.est){
+    res.list <- list(tau.est = tau.final)
+  }
+  else{
+    if(is.null(B)){
+      stop("need to specify the number of bootstrap replicate B")
+    }
+    else{
+      var.boot <- nonpara_boot(t.pfs, t.co, t.os, delta.os,
+                               cen.time, a, mat.pdt, delta.co, delta.pdt,
+                               include.pdt = include.pdt, const = const,
+                               boot.function = rpsft.cox,
+                               tau.lower = tau.lower, tau.upper = tau.upper,
+                               grid.length = grid.length, B = B)
+      res.list <- list(tau.est = tau.final,
+                       var.est = var.boot)
+    }
+  }
+
+  return(res.list)
 }
 
 #' Implement the RPSFT + IPCW method
 #'
-#' This function implements the proposed RPSFT + IPCW method and returns an 
+#' This function implements the proposed RPSFT + IPCW method and returns an
 #' estimate of the treatment effect on the overall survival. It can be used if
 #' investigators have sufficient knowledge of the confounding factors that may
 #' affect the probability of receiving the PDTs.
 #'
-#' @param t.pfs the progression-free survival (PFS) time
-#' @param t.co the observed time from the start to the end of the crossover 
-#' period
-#' @param t.os the overall survival (OS) time
-#' @param delta.os the event indicator of the OS
-#' @param cen.time the censoring time. Under administrative censoring, the 
-#' censoring time is available for each subject
-#' @param a the initial binary treatment indicator encoded as 0 (control) or 
-#' 1 (treatment)
-#' @param mat.pdt the matrix of all prognosis factors that may affect the 
-#' patient to receive the PDTs, with the dimension as n*p, where n: the sample 
+#' @param t.pfs the progression-free survival (PFS) time.
+#' @param t.co the observed time from the start to the end of the crossover
+#' period.
+#' @param t.os the overall survival (OS) time.
+#' @param delta.os the event indicator of the OS.
+#' @param cen.time the censoring time. Under administrative censoring, the
+#' censoring time is available for each subject.
+#' @param a the initial binary treatment indicator encoded as 0 (control) or
+#' 1 (treatment).
+#' @param mat.pdt the matrix of all prognosis factors that may affect the
+#' patient to receive the PDTs, with the dimension as n*p, where n: the sample
 #' size, p: dimension of the prognosis factors. Inclusion of the survival times
 #' before the PDT period is recommended.
-#' @param delta.co the event indicator of treatment crossover
-#' @param delta.pdt the event indicator of the PDTs
+#' @param delta.co the event indicator of treatment crossover.
+#' @param delta.pdt the event indicator of the PDTs.
 #' @param include.pdt a logical variable to indicate the inclusion of the PDT
 #' effects in the OS analysis. Default: `include.pdt = TRUE`.
 #' @param const the multiplicative sensitivity parameter that reflects a change
-#' in the treatment benefit for subjects in the control group with treatment 
+#' in the treatment benefit for subjects in the control group with treatment
 #' crossover.
-#' @param tau.lower the lower bound of the treatment effect parameter for the 
+#' @param tau.lower the lower bound of the treatment effect parameter for the
 #' grid search. Default: `tau.lower = -1`.
-#' @param tau.upper the upper bound of the treatment effect parameter for the 
+#' @param tau.upper the upper bound of the treatment effect parameter for the
 #' grid search. Default: `tau.upper = 1`.
-#' @param grid.length the number of values in the grid search. Default: 
+#' @param grid.length the number of values in the grid search. Default:
 #' `grid.length = 50`.
-#' @return tau.est an estimate of the treatment effect
+#' @param var.est the logical variable to indicate whether the bootstrap
+#' variance estimate will be included. Default: `var.est = FALSE`, i.e., no
+#' inclusion of the variance estimate.
+#' @param B the number of bootstrap replicate. When setting `var.est = TRUE`,
+#' `B` must be given.
+#' @return a list of test results
+#' \itemize{
+#' \item tau.est: the estimate of the treatment effect
+#' \item var.est: the variance estimate of the treatment effect if set
+#' `var.est = TRUE`
+#' }
 #' @export
 #' @examples
 #' x <- cbind(dat$x1, dat$x2)
@@ -157,26 +192,26 @@ rpsft.cox <- function(t.pfs, t.co, t.os, delta.os,
 #' delta.co <- dat$delta.co
 #' delta.os <- dat$delta.os
 #' mat.pdt <- cbind(x, t.co)
-#' res.rpsftipcw <- rpsft.ipcw(t.pfs, t.co, t.os, delta.os, 
+#' res.rpsftipcw <- rpsft.ipcw(t.pfs, t.co, t.os, delta.os,
 #'                           cen.time, a, mat.pdt, delta.co, delta.pdt,
 #'                           include.pdt = TRUE, const = 1,
 #'                           tau.lower = -3, tau.upper = 1,
 #'                           grid.length = 100)
 #' res.rpsftipcw
-rpsft.ipcw <- function(t.pfs, t.co, t.os, delta.os, 
+rpsft.ipcw <- function(t.pfs, t.co, t.os, delta.os,
                        cen.time, a, mat.pdt, delta.co, delta.pdt,
                        include.pdt = TRUE, const = 1,
                        tau.lower = -1, tau.upper = 1,
-                       grid.length = 50){
+                       grid.length = 50, var.est = FALSE, B = NULL){
   # dimension of prognosis factors
   p <- ncol(mat.pdt)
   # length of the data
   n <- length(t.pfs)
-  
+
   # transform mat.pdt to a data.frame
   df.mat.pdt <- data.frame(mat.pdt)
-  colnames(df.mat.pdt) <- paste0("x", 1:p) 
-  
+  colnames(df.mat.pdt) <- paste0("x", 1:p)
+
   ## Step 1: compute IPCW to account for the PDT effect
   if(include.pdt){
     ## for those who experience the PDTs
@@ -185,15 +220,15 @@ rpsft.ipcw <- function(t.pfs, t.co, t.os, delta.os,
                           delta.pdt = delta.pdt[index.pdt])
     dat0.pdt <- cbind(dat.pdt, df.mat.pdt[index.pdt,])
     mat0.pdt <- df.mat.pdt[index.pdt,]
-    
+
     ## for those who would have experienced the PDTs (those who progressed)
     index.pdt0 <- which(t.pfs < t.os)
     dat.pdt0 <- data.frame(a = a[index.pdt0], delta.co = delta.co[index.pdt0],
                            delta.pdt = delta.pdt[index.pdt0])
     dat0.pdt0 <- cbind(dat.pdt0, df.mat.pdt[index.pdt0,])
-    
+
     mat0.pdt0 <- df.mat.pdt[index.pdt0,]
-    
+
     formula.logit <- reformulate(paste0("x", 1:p), "delta.pdt")
     # (1) A = 1
     fit.pdt.a1 <- glm(formula.logit,
@@ -204,40 +239,40 @@ rpsft.ipcw <- function(t.pfs, t.co, t.os, delta.os,
     # (2) A = 0 & delta.co = 0
     fit.pdt.a0noco <- glm(formula.logit,
                           family = binomial,
-                          data = dat0.pdt[dat0.pdt$a == 0 & 
+                          data = dat0.pdt[dat0.pdt$a == 0 &
                                             dat0.pdt$delta.co == 0,])
-    prob.a0noco <- predict(fit.pdt.a0noco, 
-                           newdata = dat0.pdt0[dat0.pdt0$a == 0 & 
+    prob.a0noco <- predict(fit.pdt.a0noco,
+                           newdata = dat0.pdt0[dat0.pdt0$a == 0 &
                                                  dat0.pdt0$delta.co == 0,],
                            type = "response")
     # (3) A = 0 & delta.co = 1
     fit.pdt.a0co <- glm(formula.logit,
                         family = binomial,
-                        data = dat0.pdt[dat0.pdt$a == 0 & 
+                        data = dat0.pdt[dat0.pdt$a == 0 &
                                           dat0.pdt$delta.co == 1,])
-    prob.a0co <- predict(fit.pdt.a0co, 
-                         newdata = dat0.pdt0[dat0.pdt0$a == 0 & 
+    prob.a0co <- predict(fit.pdt.a0co,
+                         newdata = dat0.pdt0[dat0.pdt0$a == 0 &
                                                dat0.pdt0$delta.co == 1,],
                          type = "response")
-    
+
     # (1) unstablized weights
     ipcw.comb <- rep(1, n)
     ipcw.comb[a == 1 & t.pfs < t.os] <- 1/(1 - prob.a1)
     ipcw.comb[a == 0 & delta.co == 0 & t.pfs < t.os] <- 1/(1 - prob.a0noco)
     ipcw.comb[a == 0 & delta.co == 1 & t.pfs < t.os] <- 1/(1 - prob.a0co)
-    
+
     # (2) stablized weights (need further check)
-    # 
+    #
     # ipcw.comb <- rep(1, n)
     # ipcw.comb[a == 1 & t.co < t.os] <- 1/(1 - prob.a1)
     # ipcw.comb[a == 0 & delta.co == 0 & t.co < t.os] <- 1/(1 - prob.a0noco)
     # ipcw.comb[a == 0 & delta.co == 1 & t.co < t.os] <- 1/(1 - prob.a0co)
   }
-  
+
   else{
     ipcw.comb <- rep(1,n)
   }
-  
+
   ## Step 2: estimate the treatment effect
   res.final <- rpsft.weighted(a = a, t.pfs = t.pfs, t.co = t.co, t.os = t.os,
                               delta.os = delta.os, delta.co = delta.co,
@@ -247,46 +282,60 @@ rpsft.ipcw <- function(t.pfs, t.co, t.os, delta.os,
                               tau.lower = tau.lower, tau.upper = tau.upper,
                               grid.length = grid.length)
   tau.final <- res.final$tau
-  
-  ## Step 3: estimate the variance (bootstrap)
-  
-  
-  
-  return(list(
-    tau.est = tau.final
-  ))
+
+  ## Step 3: estimate variance by bootstrap
+  if(!var.est){
+    res.list <- list(tau.est = tau.final)
+  }
+  else{
+    if(is.null(B)){
+      stop("need to specify the number of bootstrap replicate B")
+    }
+    else{
+      var.boot <- nonpara_boot(t.pfs, t.co, t.os, delta.os,
+                               cen.time, a, mat.pdt, delta.co, delta.pdt,
+                               include.pdt = include.pdt, const = const,
+                               boot.function = rpsft.ipcw,
+                               tau.lower = tau.lower, tau.upper = tau.upper,
+                               grid.length = grid.length, B = B)
+      res.list <- list(tau.est = tau.final,
+                       var.est = var.boot)
+    }
+  }
+
+  return(res.list)
 }
 
 #' Fit the RPSFT model on the original data with the estimated PDT effects
 #'
-#' This function fits the RPSFT model and returns the treatment effect estimate 
-#' and the corresponding p-value which result in a zero test statistic of the 
-#' log-rank test. It is an intermediate function that corresponds to the second 
+#' This function fits the RPSFT model and returns the treatment effect estimate
+#' and the corresponding p-value which result in a zero test statistic of the
+#' log-rank test. It is an intermediate function that corresponds to the second
 #' step of the proposed RPSFT + Cox method to account for the treatment
-#' crossover. It can be used if investigators have sufficient knowledge of the 
+#' crossover. It can be used if investigators have sufficient knowledge of the
 #' PDT effects and the survival time during the PDT period.
 #'
-#' @param t.pfs the progression-free survival (PFS) time
-#' @param t.co the observed time from the start to the end of the crossover 
-#' period
-#' @param t.os the overall survival (OS) time
-#' @param a the initial binary treatment indicator encoded as 0 (control) or 
-#' 1 (treatment)
-#' @param delta.co the event indicator of treatment crossover
-#' @param delta.os the event indicator of the OS
-#' @param cen.time the censoring time. Under administrative censoring, the 
-#' censoring time is available for each subject
-#' @param pdt.effect a vector of the estimated PDT effects
+#' @param t.pfs the progression-free survival (PFS) time.
+#' @param t.co the observed time from the start to the end of the crossover
+#' period.
+#' @param t.os the overall survival (OS) time.
+#' @param a the initial binary treatment indicator encoded as 0 (control) or
+#' 1 (treatment).
+#' @param delta.co the event indicator of treatment crossover.
+#' @param delta.os the event indicator of the OS.
+#' @param cen.time the censoring time. Under administrative censoring, the
+#' censoring time is available for each subject.
+#' @param pdt.effect a vector of the estimated PDT effects.
 #' @param const the multiplicative sensitivity parameter that reflects a change
-#' in the treatment benefit for subjects in the control group with treatment 
+#' in the treatment benefit for subjects in the control group with treatment
 #' crossover. Default: `const = 1`.
-#' @param weights the use-defined weights used in the log-rank test. Default: 
-#' each individual has an equal weight, i.e., `weights = rep(1, length(a))`
-#' @param tau.lower the lower bound of the treatment effect parameter for the 
+#' @param weights the use-defined weights used in the log-rank test. Default:
+#' each individual has an equal weight, i.e., `weights = rep(1, length(a))`.
+#' @param tau.lower the lower bound of the treatment effect parameter for the
 #' grid search. Default: `tau.lower = -1`.
-#' @param tau.upper the upper bound of the treatment effect parameter for the 
+#' @param tau.upper the upper bound of the treatment effect parameter for the
 #' grid search. Default: `tau.upper = 1`.
-#' @param grid.length the number of values in the grid search. Default: 
+#' @param grid.length the number of values in the grid search. Default:
 #' `grid.length = 50`.
 #' @return a list of test results
 #' \itemize{
@@ -305,7 +354,7 @@ rpsft.linear <- function(t.pfs, t.co, t.os, a,
   t.pdt.a0co.w <- (t.os - t.co)*exp(pdt.effect)
   t.pdt.noco.w <- (t.os - t.pfs)*exp(pdt.effect)
   t.pdp.a0co.w <- t.co - t.pfs + t.pdt.a0co.w
-  
+
   grid.tau <- seq(tau.lower, tau.upper, length = grid.length)
   test.stat <- c(0)
   p.value <- c(0)
@@ -314,7 +363,7 @@ rpsft.linear <- function(t.pfs, t.co, t.os, a,
     u.a1 <- (t.pfs + t.pdt.noco.w)*exp(tau.temp)
     u.a0co <- t.pfs + t.pdp.a0co.w*exp(const*tau.temp)
     u.a0nco <- t.pfs + t.pdt.noco.w
-    
+
     c.adj1 <- (t.pfs+ (cen.time - t.pfs)*exp(pdt.effect))*exp(tau.temp)
     c.adj2 <- cen.time*exp(tau.temp)
     c.adj3 <- cen.time
@@ -322,10 +371,10 @@ rpsft.linear <- function(t.pfs, t.co, t.os, a,
     c.adj5 <- t.pfs + (cen.time - t.pfs)*exp(const*tau.temp)
     c.adj6 <- t.pfs + (t.co - t.pfs + (cen.time - t.co)*exp(pdt.effect))*
       exp(const*tau.temp)
-    
-    c.adj <- apply(cbind(c.adj1, c.adj2, c.adj3, c.adj4, c.adj5, c.adj6), 1, 
+
+    c.adj <- apply(cbind(c.adj1, c.adj2, c.adj3, c.adj4, c.adj5, c.adj6), 1,
                    min)
-    
+
     u.adj <- (1-a)*(delta.co*u.a0co + (1 - delta.co)*u.a0nco) + a*u.a1
     uc.adj <- cbind(u.adj, c.adj)
     v1.adj <- apply(uc.adj, 1, function(x) min(c(x[1],x[2])))
@@ -334,11 +383,11 @@ rpsft.linear <- function(t.pfs, t.co, t.os, a,
     order.ind <- sort(t.os.adj, index.return = TRUE)$ix
     unordered.weight <- weights
     order.weight <- unordered.weight[order.ind]
-    
-    data.adj <- data.frame(t.os = t.os.adj, 
-                           delta.os = delta.os.adj, 
+
+    data.adj <- data.frame(t.os = t.os.adj,
+                           delta.os = delta.os.adj,
                            a = a)
-    test.res <- weighted.logrank(Surv(t.os, delta.os) ~ a, 
+    test.res <- weighted.logrank(Surv(t.os, delta.os) ~ a,
                                  data = data.adj,
                                  weights = order.weight)
     test.stat[i] <- test.res$test.stat
@@ -348,7 +397,7 @@ rpsft.linear <- function(t.pfs, t.co, t.os, a,
   test.stat.min <- test.stat[index.min]
   p.value.opt <- p.value[index.min]
   tau.opt <- grid.tau[index.min]
-  
+
   return(list(test.stat = test.stat.min,
               p.value = p.value.opt,
               tau = tau.opt,
@@ -358,34 +407,34 @@ rpsft.linear <- function(t.pfs, t.co, t.os, a,
 
 #' Fit the RPSFT model on the original data with the estimated PDT effects
 #'
-#' This function fits the RPSFT model and returns the treatment effect estimate 
-#' and the corresponding p-value which result in a zero test statistic of the 
-#' log-rank test. It is an intermediate function that corresponds to the second 
+#' This function fits the RPSFT model and returns the treatment effect estimate
+#' and the corresponding p-value which result in a zero test statistic of the
+#' log-rank test. It is an intermediate function that corresponds to the second
 #' step of the proposed RPSFT + Cox method to account for the treatment
-#' crossover. It can be used if investigators have sufficient knowledge of the 
+#' crossover. It can be used if investigators have sufficient knowledge of the
 #' PDT effects and the survival time during the PDT period.
 #'
-#' @param t.pfs the progression-free survival (PFS) time
-#' @param t.co the observed time from the start to the end of the crossover 
-#' period
-#' @param t.os the overall survival (OS) time
-#' @param a the initial binary treatment indicator encoded as 0 (control) or 
-#' 1 (treatment)
-#' @param delta.co the event indicator of treatment crossover
-#' @param delta.pdt the event indicator of the PDTs
-#' @param delta.os the event indicator of the OS
-#' @param cen.time the censoring time. Under administrative censoring, the 
-#' censoring time is available for each subject
+#' @param t.pfs the progression-free survival (PFS) time.
+#' @param t.co the observed time from the start to the end of the crossover
+#' period.
+#' @param t.os the overall survival (OS) time.
+#' @param a the initial binary treatment indicator encoded as 0 (control) or
+#' 1 (treatment).
+#' @param delta.co the event indicator of treatment crossover.
+#' @param delta.pdt the event indicator of the PDTs.
+#' @param delta.os the event indicator of the OS.
+#' @param cen.time the censoring time. Under administrative censoring, the
+#' censoring time is available for each subject.
 #' @param const the multiplicative sensitivity parameter that reflects a change
-#' in the treatment benefit for subjects in the control group with treatment 
+#' in the treatment benefit for subjects in the control group with treatment
 #' crossover. Default: `const = 1`.
-#' @param weights the use-defined weights used in the log-rank test. Default: 
-#' each individual has an equal weight, i.e., `weights = rep(1, length(a))`
-#' @param tau.lower the lower bound of the treatment effect parameter for the 
+#' @param weights the use-defined weights used in the log-rank test. Default:
+#' each individual has an equal weight, i.e., `weights = rep(1, length(a))`.
+#' @param tau.lower the lower bound of the treatment effect parameter for the
 #' grid search. Default: `tau.lower = -1`.
-#' @param tau.upper the upper bound of the treatment effect parameter for the 
+#' @param tau.upper the upper bound of the treatment effect parameter for the
 #' grid search. Default: `tau.upper = 1`.
-#' @param grid.length the number of values in the grid search. Default: 
+#' @param grid.length the number of values in the grid search. Default:
 #' `grid.length = 50`.
 #' @return a list of test results
 #' \itemize{
@@ -404,7 +453,7 @@ rpsft.weighted <- function(t.pfs, t.co, t.os, a,
   t.os.adj0 <- delta.pdt*t.co + (1 - delta.pdt)*t.os
   t.pdp <- t.os.adj0 - t.pfs
   delta.os.adj0 <- (1 - delta.pdt)*delta.os
-  
+
   grid.tau <- seq(tau.lower, tau.upper, length = grid.length)
   test.stat <- c(0)
   p.value <- c(0)
@@ -413,12 +462,12 @@ rpsft.weighted <- function(t.pfs, t.co, t.os, a,
     u.a1 <- (t.pfs + t.pdp)*exp(tau.temp)
     u.a0co <- t.pfs + t.pdp*exp(const*tau.temp)
     u.a0nco <- t.pfs + t.pdp
-    
+
     c.adj1 <- cen.time*exp(tau.temp)
     c.adj2 <- cen.time
     c.adj3 <- t.pfs + (cen.time - t.pfs)*exp(const*tau.temp)
     c.adj <- apply(cbind(c.adj1, c.adj2, c.adj3), 1, min)
-    
+
     u.adj <- (1-a)*(delta.co*u.a0co + (1 - delta.co)*u.a0nco) + a*u.a1
     uc.adj <- cbind(u.adj, c.adj)
     v1.adj <- apply(uc.adj, 1, function(x) min(c(x[1],x[2])))
@@ -427,11 +476,11 @@ rpsft.weighted <- function(t.pfs, t.co, t.os, a,
     order.ind <- sort(t.os.adj, index.return = TRUE)$ix
     unordered.weight <- weights
     order.weight <- unordered.weight[order.ind]
-    
-    data.adj <- data.frame(t.os = t.os.adj, 
-                           delta.os = delta.os.adj, 
+
+    data.adj <- data.frame(t.os = t.os.adj,
+                           delta.os = delta.os.adj,
                            a = a)
-    test.res <- weighted.logrank(Surv(t.os, delta.os) ~ a, 
+    test.res <- weighted.logrank(Surv(t.os, delta.os) ~ a,
                                  data = data.adj,
                                  weights = order.weight)
     test.stat[i] <- test.res$test.stat
@@ -441,7 +490,7 @@ rpsft.weighted <- function(t.pfs, t.co, t.os, a,
   test.stat.min <- test.stat[index.min]
   p.value.opt <- p.value[index.min]
   tau.opt <- grid.tau[index.min]
-  
+
   return(list(test.stat = test.stat.min,
               p.value = p.value.opt,
               tau = tau.opt,
@@ -451,36 +500,139 @@ rpsft.weighted <- function(t.pfs, t.co, t.os, a,
 
 #' Conduct the weighted log-rank test
 #'
-#' This function implements the log-rank test with user-defined weights and 
-#' returns the test statistics and the p-value. 
+#' This function implements the log-rank test with user-defined weights and
+#' returns the test statistics and the p-value.
 #'
-#' @param formula the formula needed for the log-rank test
-#' @param data the data frame consists of the survival time, the event 
-#' indicator, and the initial treatment assignment
-#' @param weights the use-defined weights used in the log-rank test. Default: 
-#' each individual has an equal weight, i.e., `weights = rep(1, length(a))`
+#' @param formula the formula needed for the log-rank test.
+#' @param data the data frame consists of the survival time, the event
+#' indicator, and the initial treatment assignment.
+#' @param weights the use-defined weights used in the log-rank test. Default:
+#' each individual has an equal weight, i.e., `weights = rep(1, length(a))`.
 #' @return the test statistic and the p-value of the weighted log-rank test
 #' @import nphRCT
 #' @export
 weighted.logrank <- function(formula, data, weights = rep(1, nrow(data))){
   info.test <- nphRCT::find_at_risk(formula, data)
-  
+
   n_risk1 <- info.test$n_risk[1:(nrow(info.test) - 1)]
   n_risk0 <- info.test$n_risk[2:nrow(info.test)]
   diff.num <- n_risk1 - n_risk0
   temp <- c(cumsum(diff.num), cumsum(diff.num)[length(cumsum(diff.num))]+1)
   weights.shorten <- weights[temp]
-  
+
   Uw <- sum(with(info.test, weights.shorten*(n_event_0 - n_event*n_risk_0/n_risk)))
   Vw.all <- with(info.test, ifelse(n_risk_0*n_risk_1 == 0, 0, n_risk_0*n_risk_1*n_event*(n_risk - n_event)/(n_risk^2*(n_risk - 1))))
   Vw <- sum(weights.shorten^2*Vw.all)
-  
+
   test.stat <- (Uw/sqrt(Vw))^2
   p.value <- 1 - pchisq(test.stat, 1)
-  
+
   return(list(test.stat = test.stat,
               p.value = p.value))
 }
 
-#' @importFrom stats binomial glm pchisq predict reformulate
+#' Nonparametric bootstrap to estimate the variance
+#'
+#' This function implements the proposed RPSFT + IPCW method and returns an
+#' estimate of the treatment effect on the overall survival. It can be used if
+#' investigators have sufficient knowledge of the confounding factors that may
+#' affect the probability of receiving the PDTs.
+#'
+#' @param t.pfs the progression-free survival (PFS) time.
+#' @param t.co the observed time from the start to the end of the crossover
+#' period.
+#' @param t.os the overall survival (OS) time.
+#' @param delta.os the event indicator of the OS.
+#' @param cen.time the censoring time. Under administrative censoring, the
+#' censoring time is available for each subject.
+#' @param a the initial binary treatment indicator encoded as 0 (control) or
+#' 1 (treatment).
+#' @param mat.pdt the matrix of all prognosis factors that may affect the
+#' patient to receive the PDTs, with the dimension as n*p, where n: the sample
+#' size, p: dimension of the prognosis factors. Inclusion of the survival times
+#' before the PDT period is recommended.
+#' @param delta.co the vector of crossover indicators.
+#' @param delta.pdt the vector of the PDT indicators.
+#' @param include.pdt a logical variable to indicate the inclusion of the PDT
+#' effects in the OS analysis. Default: `include.pdt = TRUE`.
+#' @param const the multiplicative sensitivity parameter that reflects a change
+#' in the treatment benefit for subjects in the control group with treatment
+#' crossover.
+#' @param boot.function the function that is used to estimate the treatment
+#' effect. Available functions include `rpsft.cox` and `rpsft.ipcw`.
+#' @param tau.lower the lower bound of the treatment effect parameter for the
+#' grid search. Default: `tau.lower = -1`.
+#' @param tau.upper the upper bound of the treatment effect parameter for the
+#' grid search. Default: `tau.upper = 1`.
+#' @param grid.length the number of values in the grid search. Default:
+#' `grid.length = 50`.
+#' @param B the number of bootstrap replicates.
+#' @return tau.est an estimate of the treatment effect
+#' @export
+nonpara_boot <- function(t.pfs, t.co, t.os, delta.os,
+                         cen.time, a, mat.pdt, delta.co, delta.pdt,
+                         include.pdt = TRUE, const = 1,
+                         boot.function,
+                         tau.lower = -1, tau.upper = 1,
+                         grid.length = 50, B = 100){
+  # length of the data
+  n <- length(t.pfs)
+  tau.boot <- c(0)
+  for(b in 1:B){
+    set.seed(b)
+    index.boot <- sample(1:n, n, replace = TRUE)
+    t.pfs.boot <- t.pfs[index.boot]
+    t.co.boot <- t.co[index.boot]
+    t.os.boot <- t.os[index.boot]
+    delta.os.boot <- delta.os[index.boot]
+    cen.time.boot <- cen.time[index.boot]
+    a.boot <- a[index.boot]
+    mat.pdt.boot <- mat.pdt[index.boot,]
+    delta.co.boot <- delta.co[index.boot]
+    delta.pdt.boot <- delta.pdt[index.boot]
+    len.boot <- min(c(length(which(delta.co.boot == 1 & delta.pdt.boot == 0)>1),
+                      length(which(delta.co.boot == 1 & delta.pdt.boot == 1)>1)))
+    while(len.boot <= 1){
+      index.boot <- sample(1:n, n, replace = TRUE)
+      t.pfs.boot <- t.pfs[index.boot]
+      t.co.boot <- t.co[index.boot]
+      t.os.boot <- t.os[index.boot]
+      delta.os.boot <- delta.os[index.boot]
+      cen.time.boot <- cen.time[index.boot]
+      a.boot <- a[index.boot]
+      mat.pdt.boot <- mat.pdt[index.boot,]
+      delta.co.boot <- delta.co[index.boot]
+      delta.pdt.boot <- delta.pdt[index.boot]
+      len.boot <- min(c(length(which(delta.co.boot == 1 & delta.pdt.boot == 0)>1),
+                        length(which(delta.co.boot == 1 & delta.pdt.boot == 1)>1)))
+    }
+
+    if(identical(boot.function, rpsft.cox)){
+      res.boot <- boot.function(t.pfs.boot, t.co.boot, t.os.boot, delta.os.boot,
+                                cen.time.boot, a.boot, mat.pdt.boot,
+                                delta.co.boot, delta.pdt.boot,
+                                include.pdt = include.pdt, const = const,
+                                tau.lower = tau.lower, tau.upper = tau.upper,
+                                grid.length = grid.length)
+      tau.boot[b] <- res.boot$tau.est
+    }
+
+    else if(identical(boot.function, rpsft.ipcw)){
+      res.boot <- rpsft.ipcw(t.pfs.boot, t.co.boot, t.os.boot, delta.os.boot,
+                             cen.time.boot, a.boot, mat.pdt.boot,
+                             delta.co.boot, delta.pdt.boot,
+                             include.pdt = include.pdt, const = const,
+                             tau.lower = tau.lower, tau.upper = tau.upper,
+                             grid.length = grid.length)
+      tau.boot[b] <- res.boot$tau.est
+    }
+  }
+  tau.ve.boot <- var(tau.boot)
+
+  tau.ve.boot
+}
+
+
+#' @importFrom stats binomial glm pchisq predict reformulate var
 NULL
+

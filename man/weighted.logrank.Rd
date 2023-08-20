@@ -7,13 +7,13 @@
 weighted.logrank(formula, data, weights = rep(1, nrow(data)))
 }
 \arguments{
-\item{formula}{the formula needed for the log-rank test}
+\item{formula}{the formula needed for the log-rank test.}
 
 \item{data}{the data frame consists of the survival time, the event
-indicator, and the initial treatment assignment}
+indicator, and the initial treatment assignment.}
 
 \item{weights}{the use-defined weights used in the log-rank test. Default:
-each individual has an equal weight, i.e., \code{weights = rep(1, length(a))}}
+each individual has an equal weight, i.e., \code{weights = rep(1, length(a))}.}
 }
 \value{
 the test statistic and the p-value of the weighted log-rank test
