@@ -36,7 +36,7 @@ function `rpsft.cox` is as follows.
 
 ``` r
 library(rpsftmPDT)
-## basic example code
+## basic example code for the function `rpsft.cox`
 x <- cbind(dat$x1, dat$x2)
 a <- dat$a
 t.pfs <- dat$t.pfs
@@ -70,4 +70,44 @@ res.rpsftcox
 #> 
 #> $var.est
 #> [1] 0.0195938
+```
+
+Also, we provide a basic example to apply the function `rpsft.ipcw` is
+as follows.
+
+``` r
+## basic example code for the function `rpsft.ipcw`
+x <- cbind(dat$x1, dat$x2)
+a <- dat$a
+t.pfs <- dat$t.pfs
+t.co <- dat$t.co
+t.os <- dat$t.os
+cen.time <- dat$c
+delta.pfs <- dat$delta.pfs
+delta.dp <- dat$delta.dp
+delta.pdt <- dat$delta.pdt
+delta.co <- dat$delta.co
+delta.os <- dat$delta.os
+mat.pdt <- cbind(x, t.co) # better to include the survival time before the initiation of the PDTs to formulate the PDT-indicator model
+# if no variance estimate is needed
+res.rpsftipcw <- rpsft.ipcw(t.pfs, t.co, t.os, delta.os, 
+                            cen.time, a, mat.pdt, delta.co, delta.pdt,
+                            include.pdt = TRUE, const = 1,
+                            tau.lower = -3, tau.upper = 1,
+                            grid.length = 100)
+res.rpsftipcw
+#> $tau.est
+#> [1] -0.8585859
+# if the bootstrap variance estimate is included
+res.rpsftipcw <- rpsft.ipcw(t.pfs, t.co, t.os, delta.os,
+                            cen.time, a, mat.pdt, delta.co, delta.pdt,
+                            include.pdt = TRUE, const = 1,
+                            tau.lower = -3, tau.upper = 1,
+                            grid.length = 100, var.est = TRUE, B = 100)
+res.rpsftipcw
+#> $tau.est
+#> [1] -0.8585859
+#> 
+#> $var.est
+#> [1] 0.05056157
 ```
